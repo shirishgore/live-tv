@@ -32,8 +32,8 @@ export default function ContactPage() {
           Broadcasters and rights holders can ask for a channel to be
           removed from the directory. Please raise the request on the site
           owner&apos;s GitHub, stating the channel name and that you are
-          acting for the broadcaster or rights holder. Removal requests are
-          actioned as quickly as possible.
+          acting for the broadcaster or rights holder. We handle removal
+          requests as quickly as we can.
         </p>
 
         <h2 className="text-xl font-semibold">Problems with the channel listing itself</h2>
@@ -54,8 +54,8 @@ export default function ContactPage() {
         </p>
 
         <p className="leading-relaxed text-zinc-400">
-          Please do not send personal information in a report. Only the
-          details needed to identify the channel are required.
+          Don&apos;t send personal information in a report — just the
+          channel name and what happened.
         </p>
       </article>
     </main>
