@@ -3,6 +3,11 @@ import Hero from "@/components/Hero";
 import ChannelRow from "@/components/ChannelRow";
 import ChannelCard from "@/components/ChannelCard";
 import AdSlot from "@/components/AdSlot";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 export default async function HomePage() {
   let country: string | null = null;

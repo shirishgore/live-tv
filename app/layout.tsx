@@ -19,9 +19,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://live-tv-puce.vercel.app"),
   title: "Kage TV — Live TV",
   description:
     "Watch free live TV channels from around the world. Public channels from iptv-org.",
+  openGraph: {
+    title: "Kage TV — Live TV",
+    description:
+      "Watch free live TV channels from around the world. Public channels from iptv-org.",
+    url: "https://live-tv-puce.vercel.app",
+    siteName: "Kage TV",
+    type: "website",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Kage TV — Live TV",
+    description:
+      "Watch free live TV channels from around the world. Public channels from iptv-org.",
+    images: ["/og-image.png"],
+  },
 };
 
 // Every page is personalized (country + anonymous device prefs read from
