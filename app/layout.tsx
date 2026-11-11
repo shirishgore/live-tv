@@ -5,6 +5,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 import BottomDock from "@/components/BottomDock";
 import AdSense from "@/components/AdSense";
+import Analytics from "@/components/Analytics";
 import AdSlot from "@/components/AdSlot";
 import { getUiPrefs } from "@/lib/actions";
 
@@ -69,6 +70,7 @@ export default async function RootLayout({
     >
       <head>
         <AdSense />
+        <Analytics />
       </head>
       <body className="flex min-h-full flex-col bg-[#050505] text-white">
         <Header country={country} autoDetected={autoDetected} />
