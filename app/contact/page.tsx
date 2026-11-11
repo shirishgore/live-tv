@@ -4,6 +4,7 @@ export const metadata: Metadata = {
   title: "Contact — Kage TV",
   description:
     "How to report a dead channel or request a channel removal from Kage TV.",
+  alternates: { canonical: "/contact" },
 };
 
 export default function ContactPage() {
