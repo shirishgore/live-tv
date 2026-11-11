@@ -4,6 +4,7 @@ export const metadata: Metadata = {
   title: "About — Kage TV",
   description:
     "Free directory and player for publicly available live TV channels.",
+  alternates: { canonical: "/about" },
 };
 
 export default function AboutPage() {
