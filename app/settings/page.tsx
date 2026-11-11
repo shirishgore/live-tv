@@ -180,7 +180,7 @@ export default function SettingsPage() {
       <section aria-label="Country" className="mt-8">
         <h2 className="text-lg font-bold">Country</h2>
         <p className="mt-1 text-sm text-zinc-400">
-          Your home rows follow this country.
+          Home rows show channels from this country.
         </p>
         <div className="mt-3">
           {loaded ? (
