@@ -4,6 +4,7 @@ export const metadata: Metadata = {
   title: "Privacy Policy — Kage TV",
   description:
     "How Kage TV handles your data: no accounts, no sign-in, and no personal data sold.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {
