@@ -13,7 +13,11 @@ export async function generateMetadata({ params }: WatchPageProps): Promise<Meta
   const { id } = await params;
   const result = await getChannel(id);
   if (!result) return { title: 'Channel not found — Kage TV' };
-  return { title: `${result.channel.name} — Kage TV` };
+  return {
+    title: `${result.channel.name} — Kage TV`,
+    description: `Watch ${result.channel.name} live on Kage TV.`,
+    alternates: { canonical: `/watch/${id}` },
+  };
 }
 
 export default async function WatchPage({ params }: WatchPageProps) {
