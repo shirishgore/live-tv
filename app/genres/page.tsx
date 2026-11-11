@@ -1,6 +1,13 @@
 import Link from "next/link";
 import AdSlot from "@/components/AdSlot";
 import { getMeta } from "@/lib/actions";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Genres — Kage TV",
+  description: "Browse live TV channels by genre on Kage TV.",
+  alternates: { canonical: "/genres" },
+};
 
 export default async function GenresPage() {
   let categories: { name: string; count: number }[] = [];
