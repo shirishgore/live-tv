@@ -314,8 +314,6 @@ export async function listChannels(args?: {
 export async function getChannel(id: string): Promise<{
   channel: Channel;
   related: Channel[];
-  /** Aliases of `channel.streams` / `channel.streamCount` for convenience. */
-  streams: string[];
   streamCount: number;
 } | null> {
   await ensureCatalog();
@@ -354,7 +352,6 @@ export async function getChannel(id: string): Promise<{
   return {
     channel,
     related: await withCounts(relatedRows),
-    streams: channel.streams ?? [],
     streamCount: channel.streamCount,
   };
 }
@@ -364,12 +361,6 @@ export async function getMyList(): Promise<{
   planned: Channel[];
   completed: Channel[];
   favorites: Channel[];
-  /** History reshaped as continue-watching items (same entries as `history`). */
-  continueWatching: {
-    channel: Channel;
-    progressSeconds: number;
-    durationSeconds: number | null;
-  }[];
   history: {
     channel: Channel;
     watchedSeconds: number;
@@ -443,11 +434,6 @@ export async function getMyList(): Promise<{
     planned: await listByStatus('planned'),
     completed: await listByStatus('completed'),
     favorites: await withCounts(favRows.map((r) => r.channel)),
-    continueWatching: historyItems.map((h) => ({
-      channel: h.channel,
-      progressSeconds: h.progressSeconds,
-      durationSeconds: h.durationSeconds,
-    })),
     history: historyItems,
   };
 }

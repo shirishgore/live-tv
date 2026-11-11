@@ -43,18 +43,6 @@ export async function getCountryPreference(): Promise<{
   return { country: null, source: 'none' };
 }
 
-/**
- * Effective country: manual `kage_country` cookie wins, else the Vercel
- * `x-vercel-ip-country` header, else the Accept-Language region.
- * Returns `null` for All Countries (no preference detected).
- *
- * NOTE: Next 16's `cookies()`/`headers()` are async, so this is `async`
- * and must be awaited — a sync return is not possible on Next 16.
- */
-export async function getEffectiveCountry(): Promise<string | null> {
-  return (await getCountryPreference()).country;
-}
-
 /** Human-readable country name, e.g. `IN` -> `India`. `xx` -> `Unknown`. */
 export function countryName(code: string): string {
   const upper = code.trim().toUpperCase();
