@@ -1,0 +1,29 @@
+# Kage TV
+
+> Watch free live TV channels from around the world. Public channels from iptv-org, free to watch with no account.
+
+Kage TV is a live TV streaming site. Anyone can watch public IPTV channels
+from their own country. The site auto-detects the visitor's country and the
+visitor can also change country. No account or sign-in is needed. Channels can
+be saved to a watchlist on the visitor's own device.
+
+## Pages
+
+- [Home](https://live-tv-puce.vercel.app/): featured channels and rows by genre
+- [Browse](https://live-tv-puce.vercel.app/browse): search and browse all channels
+- [Genres](https://live-tv-puce.vercel.app/genres): channels by genre
+- [Sports](https://live-tv-puce.vercel.app/sports): live sports channels
+- [Movies](https://live-tv-puce.vercel.app/movies): movie channels
+- [Anime](https://live-tv-puce.vercel.app/anime): anime channels
+- [My List](https://live-tv-puce.vercel.app/list): watchlist and watch history
+- [Settings](https://live-tv-puce.vercel.app/settings): country and appearance
+- [About](https://live-tv-puce.vercel.app/about): what Kage TV is
+- [Privacy](https://live-tv-puce.vercel.app/privacy): privacy policy
+- [Contact](https://live-tv-puce.vercel.app/contact): report a broken channel
+
+## Notes
+
+- Channel streams come from the public iptv-org collection. A stream that is
+  offline is replaced by trying the channel's other streams, then similar live
+  channels.
+- The site shows ads via Google AdSense.
