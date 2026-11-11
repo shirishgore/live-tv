@@ -2,6 +2,13 @@ import { Suspense } from "react";
 import BrowseClient from "@/components/BrowseClient";
 import AdSlot from "@/components/AdSlot";
 import { getMeta, listChannels } from "@/lib/actions";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Movies — Kage TV",
+  description: "Watch movie channels live on Kage TV.",
+  alternates: { canonical: "/movies" },
+};
 
 const PAGE_SIZE = 20;
 const PRESET = "Movies";
