@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "About — Kage TV",
   description:
-    "What Kage TV is: a free directory and player for publicly available live TV channels.",
+    "Free directory and player for publicly available live TV channels.",
 };
 
 export default function AboutPage() {
@@ -35,7 +35,7 @@ export default function AboutPage() {
           listed or how streams play.
         </p>
 
-        <h2 className="text-xl font-semibold">A note on availability</h2>
+        <h2 className="text-xl font-semibold">Streams can go offline</h2>
         <p className="leading-relaxed text-zinc-300">
           Because streams come from third-party broadcasters, a channel can
           go offline, change its stream address, or become unavailable in
