@@ -74,7 +74,11 @@ CREATE INDEX IF NOT EXISTS idx_favorites_device ON favorites(device_id);
 CREATE INDEX IF NOT EXISTS idx_history_device ON history(device_id);
 `;
 
-/** Create every table (and index) if it does not exist yet. Safe to call on every read. */
+let schemaEnsured = false;
+
+/** Create every table (and index) if it does not exist yet. Runs once per server instance — the DDL never changes, so re-running it on every request just costs a round-trip. */
 export async function ensureSchema(): Promise<void> {
+  if (schemaEnsured) return;
   await client.executeMultiple(SCHEMA_SQL);
+  schemaEnsured = true;
 }
