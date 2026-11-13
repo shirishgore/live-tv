@@ -68,6 +68,8 @@ export default function Hero({
             <img
               src={current.logo}
               alt=""
+              decoding="async"
+              fetchPriority="low"
               className="max-h-56 max-w-56 object-contain sm:max-h-72 sm:max-w-72"
             />
           ) : (

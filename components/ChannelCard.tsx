@@ -43,6 +43,7 @@ export default function ChannelCard({
                 src={logo}
                 alt=""
                 loading="lazy"
+                decoding="async"
                 onError={() => setImgFailed(true)}
                 className="h-full w-full object-contain p-4"
               />

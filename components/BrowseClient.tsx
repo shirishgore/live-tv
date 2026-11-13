@@ -17,6 +17,7 @@ export default function BrowseClient({
   categories,
   countries,
   presetCategory,
+  preferredCountry,
 }: {
   channels: Channel[];
   total: number;
@@ -28,6 +29,8 @@ export default function BrowseClient({
   categories: string[];
   countries: CountryOption[];
   presetCategory?: string;
+  /** Country from the header picker (cookie/header); applies when the URL has no ?country=. */
+  preferredCountry?: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -72,6 +75,15 @@ export default function BrowseClient({
   }
 
   const activeCategory = presetCategory ?? category;
+
+  // The country actually filtering this list: a real ?country= code wins;
+  // ?country=all means all; with no param the header picker's country
+  // applies, or all countries when there is no pick either.
+  const effectiveCountry = !country
+    ? (preferredCountry ?? "")
+    : country.toUpperCase() === "ALL"
+      ? ""
+      : country;
 
   return (
     <div>
@@ -133,10 +145,10 @@ export default function BrowseClient({
         >
           <button
             type="button"
-            onClick={() => updateParams({ country: null })}
-            aria-pressed={!country}
+            onClick={() => updateParams({ country: "all" })}
+            aria-pressed={!effectiveCountry}
             className={
-              !country
+              !effectiveCountry
                 ? "shrink-0 rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-sm font-semibold text-black"
                 : "shrink-0 rounded-full border border-white/15 px-3.5 py-1.5 text-sm text-zinc-300 hover:border-[var(--accent)]"
             }
@@ -148,9 +160,9 @@ export default function BrowseClient({
               key={c.code}
               type="button"
               onClick={() => updateParams({ country: c.code })}
-              aria-pressed={country.toUpperCase() === c.code.toUpperCase()}
+              aria-pressed={effectiveCountry.toUpperCase() === c.code.toUpperCase()}
               className={
-                country.toUpperCase() === c.code.toUpperCase()
+                effectiveCountry.toUpperCase() === c.code.toUpperCase()
                   ? "shrink-0 rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-sm font-semibold text-black"
                   : "shrink-0 rounded-full border border-white/15 px-3.5 py-1.5 text-sm text-zinc-300 hover:border-[var(--accent)]"
               }
