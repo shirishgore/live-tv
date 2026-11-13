@@ -29,7 +29,13 @@ body {
   color: #050505;
 }
 
-/* Horizontal snap-scroll rows */
+/* Off-screen rows skip layout/paint until scrolled to — the homepage has
+   ~30 rows, so this is what makes scrolling smooth. The intrinsic-size
+   estimate keeps the scrollbar steady while rows are skipped. */
+.row-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
+}
 .row-scroll {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
