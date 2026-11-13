@@ -148,28 +148,29 @@ function requireId(id: unknown): string {
   return id.trim();
 }
 
-export async function getHome(country?: string | null): Promise<{
+// The homepage's featured channels and category rows are the same for
+// every visitor from one country — only Continue Watching and My List
+// depend on the device. Cache the shared part per country for 1 hour so
+// a repeat visit skips the database almost entirely: a warm load is then
+// a few small queries instead of ~35 round-trips, which is what makes
+// the page feel instant. The catalog only changes on the daily refresh,
+// so a 1-hour stale window is harmless; a fresh server instance starts
+// with an empty cache.
+const HOME_SHARED_TTL_MS = 60 * 60 * 1000;
+type HomeShared = {
   featured: Channel[];
   rows: { title: string; channels: Channel[] }[];
-  continueWatching: {
-    channel: Channel;
-    watchedSeconds: number;
-    progressSeconds: number;
-    /** Live channels have no known duration, so this is always null. */
-    durationSeconds: number | null;
-  }[];
-  watchlist: Channel[];
-}> {
-  await ensureCatalog();
-  const filter = await resolveCountry(country);
-  const cc = countryCondition(filter);
-  const deviceId = await getDeviceId();
+};
+const homeSharedCache = new Map<string, { value: HomeShared; at: number }>();
 
-  // The homepage used to run ~70 DB round-trips one after another (one
-  // list + one stream-count query per category). The DB sits in Mumbai
-  // while the function runs in the US, so each round-trip costs ~200ms
-  // and the page took ~14s to render. The independent fetches below run
-  // concurrently, and all stream counts share a single query.
+async function getHomeShared(
+  filter: string | null,
+  cc: SQL | undefined,
+): Promise<HomeShared> {
+  const key = filter ?? 'ALL';
+  const cached = homeSharedCache.get(key);
+  if (cached && Date.now() - cached.at < HOME_SHARED_TTL_MS) return cached.value;
+
   const featuredPromise = (async () => {
     // Featured: 6 channels, prefer ones with logos; fill with others if short.
     const withLogo = await db
@@ -205,6 +206,73 @@ export async function getHome(country?: string | null): Promise<{
     .where(cc)
     .groupBy(channels.category);
 
+  const [featuredRows, catRows] = await Promise.all([
+    featuredPromise,
+    catRowsPromise,
+  ]);
+
+  // One row per category: main categories first, then the rest alphabetically.
+  const orderedCats = catRows
+    .map((r) => r.category)
+    .sort((a, b) => {
+      const ai = MAIN_CATEGORIES.indexOf(a);
+      const bi = MAIN_CATEGORIES.indexOf(b);
+      if (ai !== -1 || bi !== -1) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      return a.localeCompare(b);
+    });
+
+  // All category rows fetched concurrently (20 channels each).
+  const rowLists = await Promise.all(
+    orderedCats.map((category) =>
+      db
+        .select()
+        .from(channels)
+        .where(
+          cc
+            ? and(cc, eq(channels.category, category))
+            : eq(channels.category, category),
+        )
+        .orderBy(asc(channels.name))
+        .limit(20),
+    ),
+  );
+
+  // One stream-count query for every shared channel on the page.
+  const counts = await streamCounts([
+    ...featuredRows.map((r) => r.id),
+    ...rowLists.flat().map((r) => r.id),
+  ]);
+  const toChannels = (rows: ChannelRow[]): Channel[] =>
+    rows.map((r) => toChannel(r, counts.get(r.id) ?? 0));
+
+  const value: HomeShared = {
+    featured: toChannels(featuredRows),
+    rows: orderedCats.map((category, i) => ({
+      title: category,
+      channels: toChannels(rowLists[i] ?? []),
+    })),
+  };
+  homeSharedCache.set(key, { value, at: Date.now() });
+  return value;
+}
+
+export async function getHome(country?: string | null): Promise<{
+  featured: Channel[];
+  rows: { title: string; channels: Channel[] }[];
+  continueWatching: {
+    channel: Channel;
+    watchedSeconds: number;
+    progressSeconds: number;
+    /** Live channels have no known duration, so this is always null. */
+    durationSeconds: number | null;
+  }[];
+  watchlist: Channel[];
+}> {
+  await ensureCatalog();
+  const filter = await resolveCountry(country);
+  const cc = countryCondition(filter);
+  const deviceId = await getDeviceId();
+
   const historyPromise = db
     .select({ channel: channels, watchedSeconds: history.watchedSeconds })
     .from(history)
@@ -236,43 +304,15 @@ export async function getHome(country?: string | null): Promise<{
     .orderBy(asc(channels.name))
     .limit(50);
 
-  const [featuredRows, catRows, historyRows, watchRows] = await Promise.all([
-    featuredPromise,
-    catRowsPromise,
+  const [shared, historyRows, watchRows] = await Promise.all([
+    getHomeShared(filter, cc),
     historyPromise,
     watchPromise,
   ]);
 
-  // One row per category: main categories first, then the rest alphabetically.
-  const orderedCats = catRows
-    .map((r) => r.category)
-    .sort((a, b) => {
-      const ai = MAIN_CATEGORIES.indexOf(a);
-      const bi = MAIN_CATEGORIES.indexOf(b);
-      if (ai !== -1 || bi !== -1) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-      return a.localeCompare(b);
-    });
-
-  // All category rows fetched concurrently (20 channels each).
-  const rowLists = await Promise.all(
-    orderedCats.map((category) =>
-      db
-        .select()
-        .from(channels)
-        .where(
-          cc
-            ? and(cc, eq(channels.category, category))
-            : eq(channels.category, category),
-        )
-        .orderBy(asc(channels.name))
-        .limit(20),
-    ),
-  );
-
-  // One stream-count query for every channel on the page.
+  // Stream counts only for the per-device channels; the shared rows
+  // already carry theirs from the cache.
   const counts = await streamCounts([
-    ...featuredRows.map((r) => r.id),
-    ...rowLists.flat().map((r) => r.id),
     ...historyRows.map((r) => r.channel.id),
     ...watchRows.map((r) => r.channel.id),
   ]);
@@ -280,11 +320,8 @@ export async function getHome(country?: string | null): Promise<{
     rows.map((r) => toChannel(r, counts.get(r.id) ?? 0));
 
   return {
-    featured: toChannels(featuredRows),
-    rows: orderedCats.map((category, i) => ({
-      title: category,
-      channels: toChannels(rowLists[i] ?? []),
-    })),
+    featured: shared.featured,
+    rows: shared.rows,
     continueWatching: historyRows.map((r) => ({
       channel: toChannel(r.channel, counts.get(r.channel.id) ?? 0),
       watchedSeconds: r.watchedSeconds,
