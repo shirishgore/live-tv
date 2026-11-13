@@ -5,13 +5,13 @@ import { getMeta, listChannels } from "@/lib/actions";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Sports — Kage TV",
-  description: "Watch live sports channels on Kage TV.",
-  alternates: { canonical: "/sports" },
+  title: "Movies — Kage TV",
+  description: "Watch movie channels live on Kage TV.",
+  alternates: { canonical: "/movies" },
 };
 
 const PAGE_SIZE = 20;
-const PRESET = "Sports";
+const PRESET = "Movies";
 
 type SearchParams = {
   q?: string | string[];
@@ -23,7 +23,7 @@ function first(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
-export default async function SportsPage({
+export default async function MoviesPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -40,7 +40,7 @@ export default async function SportsPage({
 
   return (
     <div>
-      <h1 className="mt-6 text-2xl font-bold">Sports</h1>
+      <h1 className="mt-6 text-2xl font-bold">Movies</h1>
       <div className="mt-4">
         <AdSlot />
       </div>
@@ -55,6 +55,7 @@ export default async function SportsPage({
           country={country}
           categories={[]}
           countries={meta?.countries ?? []}
+          preferredCountry={meta?.country ?? null}
           presetCategory={PRESET}
         />
       </Suspense>
