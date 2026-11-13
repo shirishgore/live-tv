@@ -12,7 +12,7 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import { refreshCatalogData } from './catalog';
-import { countryName, getCountryPreference } from './country';
+import { countryName, getCountryPreference, normalizeCountryCode } from './country';
 import { db, ensureSchema } from './db';
 import {
   channels,
@@ -102,7 +102,8 @@ async function resolveCountry(explicit?: string | null): Promise<string | null> 
   if (explicit !== undefined && explicit !== null) {
     const v = explicit.trim().toUpperCase();
     if (v === '' || v === 'ALL') return null;
-    return /^[A-Z]{2}$/.test(v) ? v.toLowerCase() : null;
+    const normalized = normalizeCountryCode(v);
+    return normalized ? normalized.toLowerCase() : null;
   }
   const effective = await getCountryPreference();
   return effective.country ? effective.country.toLowerCase() : null;
@@ -149,19 +150,24 @@ export async function getHome(country?: string | null): Promise<{
   const cc = countryCondition(filter);
   const deviceId = await getDeviceId();
 
-  // Featured: 6 channels, prefer ones with logos; fill with others if short.
-  const withLogo = await db
-    .select()
-    .from(channels)
-    .where(
-      cc
-        ? and(cc, sql`${channels.logo} IS NOT NULL AND ${channels.logo} != ''`)
-        : sql`${channels.logo} IS NOT NULL AND ${channels.logo} != ''`,
-    )
-    .orderBy(asc(channels.name))
-    .limit(6);
-  let featuredRows = withLogo;
-  if (featuredRows.length < 6) {
+  // The homepage used to run ~70 DB round-trips one after another (one
+  // list + one stream-count query per category). The DB sits in Mumbai
+  // while the function runs in the US, so each round-trip costs ~200ms
+  // and the page took ~14s to render. The independent fetches below run
+  // concurrently, and all stream counts share a single query.
+  const featuredPromise = (async () => {
+    // Featured: 6 channels, prefer ones with logos; fill with others if short.
+    const withLogo = await db
+      .select()
+      .from(channels)
+      .where(
+        cc
+          ? and(cc, sql`${channels.logo} IS NOT NULL AND ${channels.logo} != ''`)
+          : sql`${channels.logo} IS NOT NULL AND ${channels.logo} != ''`,
+      )
+      .orderBy(asc(channels.name))
+      .limit(6);
+    if (withLogo.length >= 6) return withLogo;
     const extra = await db
       .select()
       .from(channels)
@@ -174,41 +180,17 @@ export async function getHome(country?: string | null): Promise<{
           : sql`${channels.logo} IS NULL OR ${channels.logo} = ''`,
       )
       .orderBy(asc(channels.name))
-      .limit(6 - featuredRows.length);
-    featuredRows = [...featuredRows, ...extra];
-  }
-  const featured = await withCounts(featuredRows);
+      .limit(6 - withLogo.length);
+    return [...withLogo, ...extra];
+  })();
 
-  // One row per category: main categories first, then the rest alphabetically.
-  const catRows = await db
+  const catRowsPromise = db
     .select({ category: channels.category, n: count() })
     .from(channels)
     .where(cc)
     .groupBy(channels.category);
-  const orderedCats = catRows
-    .map((r) => r.category)
-    .sort((a, b) => {
-      const ai = MAIN_CATEGORIES.indexOf(a);
-      const bi = MAIN_CATEGORIES.indexOf(b);
-      if (ai !== -1 || bi !== -1) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-      return a.localeCompare(b);
-    });
-  const rows: { title: string; channels: Channel[] }[] = [];
-  for (const category of orderedCats) {
-    const list = await db
-      .select()
-      .from(channels)
-      .where(
-        cc
-          ? and(cc, eq(channels.category, category))
-          : eq(channels.category, category),
-      )
-      .orderBy(asc(channels.name))
-      .limit(20);
-    rows.push({ title: category, channels: await withCounts(list) });
-  }
 
-  const historyRows = await db
+  const historyPromise = db
     .select({ channel: channels, watchedSeconds: history.watchedSeconds })
     .from(history)
     .innerJoin(channels, eq(history.channelId, channels.id))
@@ -219,17 +201,8 @@ export async function getHome(country?: string | null): Promise<{
     )
     .orderBy(desc(history.updatedAt))
     .limit(20);
-  const historyCounts = await streamCounts(
-    historyRows.map((r) => r.channel.id),
-  );
-  const continueWatching = historyRows.map((r) => ({
-    channel: toChannel(r.channel, historyCounts.get(r.channel.id) ?? 0),
-    watchedSeconds: r.watchedSeconds,
-    progressSeconds: r.watchedSeconds,
-    durationSeconds: null as number | null,
-  }));
 
-  const watchRows = await db
+  const watchPromise = db
     .select({ channel: channels })
     .from(watchlist)
     .innerJoin(channels, eq(watchlist.channelId, channels.id))
@@ -248,11 +221,62 @@ export async function getHome(country?: string | null): Promise<{
     .orderBy(asc(channels.name))
     .limit(50);
 
+  const [featuredRows, catRows, historyRows, watchRows] = await Promise.all([
+    featuredPromise,
+    catRowsPromise,
+    historyPromise,
+    watchPromise,
+  ]);
+
+  // One row per category: main categories first, then the rest alphabetically.
+  const orderedCats = catRows
+    .map((r) => r.category)
+    .sort((a, b) => {
+      const ai = MAIN_CATEGORIES.indexOf(a);
+      const bi = MAIN_CATEGORIES.indexOf(b);
+      if (ai !== -1 || bi !== -1) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      return a.localeCompare(b);
+    });
+
+  // All category rows fetched concurrently (20 channels each).
+  const rowLists = await Promise.all(
+    orderedCats.map((category) =>
+      db
+        .select()
+        .from(channels)
+        .where(
+          cc
+            ? and(cc, eq(channels.category, category))
+            : eq(channels.category, category),
+        )
+        .orderBy(asc(channels.name))
+        .limit(20),
+    ),
+  );
+
+  // One stream-count query for every channel on the page.
+  const counts = await streamCounts([
+    ...featuredRows.map((r) => r.id),
+    ...rowLists.flat().map((r) => r.id),
+    ...historyRows.map((r) => r.channel.id),
+    ...watchRows.map((r) => r.channel.id),
+  ]);
+  const toChannels = (rows: ChannelRow[]): Channel[] =>
+    rows.map((r) => toChannel(r, counts.get(r.id) ?? 0));
+
   return {
-    featured,
-    rows,
-    continueWatching,
-    watchlist: await withCounts(watchRows.map((r) => r.channel)),
+    featured: toChannels(featuredRows),
+    rows: orderedCats.map((category, i) => ({
+      title: category,
+      channels: toChannels(rowLists[i] ?? []),
+    })),
+    continueWatching: historyRows.map((r) => ({
+      channel: toChannel(r.channel, counts.get(r.channel.id) ?? 0),
+      watchedSeconds: r.watchedSeconds,
+      progressSeconds: r.watchedSeconds,
+      durationSeconds: null as number | null,
+    })),
+    watchlist: toChannels(watchRows.map((r) => r.channel)),
   };
 }
 
@@ -610,24 +634,26 @@ export async function getMeta(): Promise<{
   await ensureCatalog();
   const pref = await getCountryPreference();
 
-  const countryRows = await db
-    .select({ code: channels.country, n: count() })
-    .from(channels)
-    .groupBy(channels.country)
-    .orderBy(desc(count()));
-  const categoryRows = await db
-    .select({ name: channels.category, n: count() })
-    .from(channels)
-    .groupBy(channels.category)
-    .orderBy(desc(count()));
-  const [{ n: totalChannels }] = await db
-    .select({ n: count() })
-    .from(channels);
-  const metaRows = await db
-    .select()
-    .from(meta)
-    .where(eq(meta.key, 'lastRefresh'))
-    .limit(1);
+  // Independent lookups — run together, not one after another.
+  const [countryRows, categoryRows, totalRows, metaRows] = await Promise.all([
+    db
+      .select({ code: channels.country, n: count() })
+      .from(channels)
+      .groupBy(channels.country)
+      .orderBy(desc(count())),
+    db
+      .select({ name: channels.category, n: count() })
+      .from(channels)
+      .groupBy(channels.category)
+      .orderBy(desc(count())),
+    db.select({ n: count() }).from(channels),
+    db
+      .select()
+      .from(meta)
+      .where(eq(meta.key, 'lastRefresh'))
+      .limit(1),
+  ]);
+  const [{ n: totalChannels }] = totalRows;
 
   return {
     countries: countryRows.map((r) => ({
@@ -727,11 +753,17 @@ export async function setCountryPref(
 ): Promise<{ country: string | null }> {
   const store = await cookies();
   if (code === null) {
-    store.delete('kage_country');
+    // Remember the explicit "All Countries" choice as ALL. Deleting the
+    // cookie made the next load fall back to auto-detect instead of all.
+    store.set('kage_country', 'ALL', {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: 'lax',
+    });
     return { country: null };
   }
-  const normalized = code.trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(normalized)) {
+  const normalized = normalizeCountryCode(code);
+  if (!normalized) {
     throw new Error('Country code must be a 2-letter code, or null for All Countries.');
   }
   store.set('kage_country', normalized, {
@@ -745,3 +777,4 @@ export async function setCountryPref(
 export async function refreshCatalog(): Promise<{ total: number }> {
   return refreshCatalogData();
 }
+

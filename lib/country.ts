@@ -3,13 +3,26 @@ import { cookies, headers } from 'next/headers';
 export const COUNTRY_COOKIE = 'kage_country';
 const CODE_RE = /^[A-Za-z]{2}$/;
 
-export type CountrySource = 'manual' | 'header' | 'language' | 'none';
+/**
+ * Codes the outside world uses that differ from the catalog's codes.
+ * iptv-org stores the United Kingdom as `uk`, while browsers, Vercel's
+ * geo header and IP lookups report it as `gb` (the ISO code). Without
+ * this alias a UK visitor's auto-detected `GB` matches zero channels
+ * and the homepage renders empty.
+ */
+const COUNTRY_ALIASES: Record<string, string> = { GB: 'UK' };
 
-function normalize(code: string | undefined | null): string | null {
+/** Normalize a 2-letter country code to the catalog's spelling, or null. */
+export function normalizeCountryCode(
+  code: string | undefined | null,
+): string | null {
   if (!code) return null;
   const c = code.trim().toUpperCase();
-  return CODE_RE.test(c) ? c : null;
+  const aliased = COUNTRY_ALIASES[c] ?? c;
+  return CODE_RE.test(aliased) ? aliased : null;
 }
+
+export type CountrySource = 'manual' | 'header' | 'language' | 'none';
 
 /** Region subtag of an Accept-Language value, e.g. `en-IN` / `en_US` -> `IN`. */
 function regionFromAcceptLanguage(value: string | null): string | null {
@@ -28,14 +41,22 @@ export async function getCountryPreference(): Promise<{
   source: CountrySource;
 }> {
   const cookieStore = await cookies();
-  const manual = normalize(cookieStore.get(COUNTRY_COOKIE)?.value);
+  const rawCookie = cookieStore.get(COUNTRY_COOKIE)?.value;
+  // Explicit "All Countries" choice (stored as ALL): beats auto-detect.
+  // Deleting the cookie instead silently reverted to the detected country.
+  if (rawCookie?.trim().toUpperCase() === 'ALL') {
+    return { country: null, source: 'manual' };
+  }
+  const manual = normalizeCountryCode(rawCookie);
   if (manual) return { country: manual, source: 'manual' };
 
   const headerStore = await headers();
-  const fromHeader = normalize(headerStore.get('x-vercel-ip-country'));
+  const fromHeader = normalizeCountryCode(
+    headerStore.get('x-vercel-ip-country'),
+  );
   if (fromHeader) return { country: fromHeader, source: 'header' };
 
-  const fromLanguage = normalize(
+  const fromLanguage = normalizeCountryCode(
     regionFromAcceptLanguage(headerStore.get('accept-language')),
   );
   if (fromLanguage) return { country: fromLanguage, source: 'language' };
