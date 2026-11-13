@@ -75,11 +75,22 @@ async function withCounts(rows: ChannelRow[]): Promise<Channel[]> {
 
 /** One in-flight catalog refresh shared by concurrent first reads. */
 let refreshPromise: Promise<{ total: number }> | null = null;
+// The catalog only changes on the daily refresh, so re-counting it on
+// every request is a wasted round-trip. Remember a confirmed non-empty
+// catalog for 10 minutes; a fresh instance or an empty catalog still
+// checks the database. (If the DB were ever wiped, the next check at
+// most 10 minutes later re-seeds it.)
+let catalogSeededAt = 0;
+const CATALOG_SEEDED_TTL_MS = 10 * 60 * 1000;
 
 async function ensureCatalog(): Promise<void> {
   await ensureSchema();
+  if (Date.now() - catalogSeededAt < CATALOG_SEEDED_TTL_MS) return;
   const [{ n }] = await db.select({ n: count() }).from(channels);
-  if (n > 0) return;
+  if (n > 0) {
+    catalogSeededAt = Date.now();
+    return;
+  }
   if (!refreshPromise) {
     refreshPromise = refreshCatalogData().finally(() => {
       refreshPromise = null;
@@ -101,9 +112,13 @@ async function ensureCatalog(): Promise<void> {
 async function resolveCountry(explicit?: string | null): Promise<string | null> {
   if (explicit !== undefined && explicit !== null) {
     const v = explicit.trim().toUpperCase();
-    if (v === '' || v === 'ALL') return null;
+    if (v === 'ALL') return null;
     const normalized = normalizeCountryCode(v);
-    return normalized ? normalized.toLowerCase() : null;
+    // A real code wins. An empty or invalid one is not a choice for
+    // "all countries" — it falls through to the saved preference below,
+    // so section pages without a ?country= param follow the country
+    // the user picked in the header instead of showing everything.
+    if (normalized) return normalized.toLowerCase();
   }
   const effective = await getCountryPreference();
   return effective.country ? effective.country.toLowerCase() : null;
