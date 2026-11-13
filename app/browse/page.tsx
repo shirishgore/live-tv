@@ -60,6 +60,7 @@ export default async function BrowsePage({
           country={country}
           categories={(meta?.categories ?? []).map((c) => c.name)}
           countries={meta?.countries ?? []}
+          preferredCountry={meta?.country ?? null}
         />
       </Suspense>
       <div className="mt-8">

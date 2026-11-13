@@ -26,7 +26,7 @@ export default function ChannelRow({
   }
 
   return (
-    <section aria-label={title} className="mt-8">
+    <section aria-label={title} className="row-section mt-8">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-white">
           <span className="mr-2 text-[var(--accent)]">[{num}]</span>

@@ -55,6 +55,7 @@ export default async function MoviesPage({
           country={country}
           categories={[]}
           countries={meta?.countries ?? []}
+          preferredCountry={meta?.country ?? null}
           presetCategory={PRESET}
         />
       </Suspense>
