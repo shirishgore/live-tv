@@ -10,6 +10,9 @@ const MANUAL_KEY = "kage-tv-country-manual";
 
 export function countryFlag(code: string): string {
   const upper = code.toUpperCase();
+  // The catalog stores the UK as UK, but there is no 🇺🇰 flag — the
+  // United Kingdom's flag is the GB regional-indicator pair.
+  if (upper === 'UK') return '🇬🇧';
   if (!/^[A-Z]{2}$/.test(upper)) return "🌐";
   return String.fromCodePoint(
     ...[...upper].map((c) => 127397 + c.charCodeAt(0)),
@@ -86,8 +89,12 @@ export default function CountryPicker({
 
     (async () => {
       const fromIp = await detectFromIp();
-      const code =
+      const detected =
         fromIp ?? detectFromLanguage() ?? detectFromTimezone() ?? null;
+      // The outside world reports the UK as GB; the catalog stores it
+      // as UK — normalize before checking the list, or auto-detect
+      // would bail for every UK visitor.
+      const code = detected === 'GB' ? 'UK' : detected;
       if (!code) return;
       if (
         countries.length > 0 &&
